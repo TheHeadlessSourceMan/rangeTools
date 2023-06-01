@@ -25,6 +25,11 @@ UnitsType=typing.Any
 
 RangeCompatible=typing.Union[NumberLike,str]
 
+def asRange(range:typing.Union["Range",RangeCompatible])->"Range":
+    if isinstance(range,Range):
+        return range
+    return Range(range)
+
 NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type
 NumberLikeCompatabilityT=typing.TypeVar("NumberLikeCompatabilityT") # when setting a Range's low and high values, these types will be acceptable
 class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
@@ -98,7 +103,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
             self.low=low # type:ignore
             if high is not None:
                 self.high=high # type:ignore
-            self.high=low # type:ignore
+            else:
+                self.high=low # type:ignore
 
     def copy(self)->"Range[NumberLikeT,NumberLikeCompatabilityT]":
         """
@@ -131,7 +137,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
         If assigning a low greater than the current high, the high will change to equal low
         """
         self._low=self.elementFactory(low)
-        if self._low>self._high:
+        if hasattr(self,'_high') and self._low>self._high:
             self._high=self._low
     min=low
     minimum=low
@@ -178,7 +184,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
         if self._step is None:
             return self.elementFactory(1) # type:ignore
         return self._step
-    @property.setter
+    @step.setter
     def step(self,step:typing.Union[NumberLikeT,NumberLikeCompatabilityT])->None:
         self._step=self.elementFactory(step)
 

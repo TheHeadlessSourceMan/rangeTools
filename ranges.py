@@ -10,13 +10,11 @@ class Ranges(typing.Generic[NumberLikeT]):
     A set of disconnected ranges
     """
     def __init__(self,
-        ranges:typing.Union[None,Range,typing.Iterable[Range[NumberLikeT]]]=None,
-        center:typing.Union[None,float]=None):
+        ranges:typing.Union[None,Range,typing.Iterable[Range]]=None):
         """ """
         self._ranges:typing.List[Range]=[]
         if ranges is not None:
             self.append(ranges)
-        Range.__init__(self,None,None,center)
 
     def __iter__(self)->typing.Iterator[Range]:
         return self._ranges.__iter__()
@@ -46,7 +44,7 @@ class Ranges(typing.Generic[NumberLikeT]):
             if acc is None or r.minimum<acc:
                 acc=r.minimum
         if acc is None:
-            acc=0
+            return 0.0
         return acc
 
     @property
@@ -59,16 +57,45 @@ class Ranges(typing.Generic[NumberLikeT]):
             if acc is None or r.maximum>acc:
                 acc=r.maximum
         if acc is None:
-            acc=0
+            return 0.0
         return acc
 
     def contains(self,other:typing.Union["Range",float])->bool:
-        if not isinstance(other,Range):
-            other=float(other)
+        """
+        This is the same as
+            getRange(other) is not None
+        """
+        return self.getRange(other) is not None
+    
+    def getRange(self,item:typing.Union["Range",float])->typing.Optional[Range]:
+        """
+        Get the first range in the list that contains the given item.
+        If not in any of the ranges, returns None.
+        """
         for r in self._ranges:
-            if r.contains(other):
-                return True
-        return False
+            if r.contains(item):
+                return r
+        return None
+    
+    def getNearestRange(self,item:typing.Union["Range",float])->Range:
+        """
+        Get the first range in the list that contains the given item.
+        If not in any of the ranges, returns the one with the edge closest to item.
+        
+        If there are no ranges raises exception
+        """
+        if not self._ranges:
+            raise IndexError('There are no ranges')
+        ret=self.getRange(item)
+        if ret is not None:
+            return ret
+        bestVal=0.0
+        for range in self._ranges:
+            val=min(abs(float(range.low-item)),abs(float(range.high-item)))
+            if ret is None or val<bestVal:
+                bestVal=val
+                ret=range
+        return ret # type:ignore
 
     def __cmp__(self,
         other:typing.Union[float,"Range"]

@@ -1,5 +1,5 @@
 """
 Tools for working with value ranges
 """
-from .range import *
-from .ranges import *
+from rangeTools.range import *
+from rangeTools.ranges import *
