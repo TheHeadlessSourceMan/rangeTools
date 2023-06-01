@@ -3,6 +3,7 @@ Specify ranges in timedelta form, for example "3-5 days"
 """
 import typing
 import collections.abc
+import math
 
 
 class NumberLike(typing.Protocol):
@@ -126,6 +127,159 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
             if not isinstance(range,Range):
                 range=Range(range)
             yield range
+
+    def split(self,
+        sectionSize:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,
+        numSections:typing.Optional[NumberLike]=None,
+        endSizes:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,
+        separatorSizes:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,
+        remainderHandline:str="section_stretch",
+        yieldEnds:bool=True,
+        yieldSections:bool=True,
+        yieldSeparators:bool=True
+        )->typing.Generator['Range[NumberLikeT,NumberLikeCompatabilityT]',None,None]:
+        """
+        Very versitile function to split up a range into range parts.
+
+        :sectionSize: the size of the parts to split into (must specify this OR numParts. if neither is specified, use self.step as size)
+        :numSections: the number of equally-sized parts to split into (must specify this OR size. if neither is specified, use self.step as size)
+        :endSizes: if specified, will generate ranges of this size on both ends
+        :separatorSizes: if specified, will generate separators of this size between all sections
+        :remainderHandling: how do deal with remainder if it doesn't work out evenly
+            "remainder_section" = create an extra section with however much remains
+            "section_stretch" = stretch the existing ranges to take up the remainder [default]
+            "section_shrink" = add an extra section and shrink the difference across all sections
+            "section_stretch_shrink" = stretch or shrink(by removing one) to whichever number of sections is the closest fit
+            "total_shrink" = simply ignore any remainder and allow the total size to shrink
+            "total_grow" = allow the total size to grow so there is no remainder
+            "total_shrink_grow" = either total_shrink or total_grow, depending on which is the closest way to achieve full-sized sections
+            NOTE: this is unused for numParts, since what they're doing is essentially "stretch"
+        :yieldEnds: whether or not to yield the ends as Range objects (default = True)
+        :yieldSections: whether or not to yield the the sections themselves as Range objects (default = True)
+        :yieldSeparators: whether or not to yield the separators between sections as Range objects (default = True)
+
+        Example:
+            create a 12inch box with 3inch sections, 1/2inch end boards, and 1/4inch dividers between sections
+                Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25)
+            get just the end boards
+                Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,yieldEnds=False,yieldSections=False,yieldSeparators)
+            get just the separators boards
+                Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,yieldEnds=False,yieldSections=False,yieldSeparators=True)
+            How many separators are there?
+                len(list(Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,yieldEnds=False,yieldSections=False,yieldSeparators=True)))
+            How many sections are there?
+                len(list(Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,yieldEnds=False,yieldSections=True,yieldSeparators=False)))
+            What is the width of the sections?
+                for section in Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,yieldEnds=False,yieldSections=True,yieldSeparators=False)))
+                    print(section.span)
+                    break
+            ignore any extra space to keep the box to keep exactly 3inch sections
+                Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,remainderHandline='total_shrink')
+            just for fun, get the new size after doing that
+                Range(Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,remainderHandline='total_shrink')).span
+            actually, it's probably more efficient to go off just the end boards
+                Range(Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,remainderHandline='total_shrink',yieldEnds=True,yieldSections=False,yieldSeparators=False)).span
+            instead of that, take up remainder by keeping exactly 3inch sections, but leave whatever is left over in its own small section
+                Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,remainderHandline='remainder_section')
+        """
+        if endSizes is not None:
+            endSizes=self.elementFactory(endSizes)
+        if separatorSizes is not None:
+            separatorSizes=self.elementFactory(separatorSizes)
+        remainderSection:typing.Optional[NumberLikeT]=None
+        # figure out what the sizes of things will be
+        if numSections is not None:
+            # using number of sections we have to calculate sectionSize
+            # this is simpler because we don't have to mess with remainders!
+            numSections=float(numSections)
+            span=self.span
+            totalSize=span
+            if endSizes is not None:
+                totalSize-=endSizes*2
+            if separatorSizes is not None:
+                totalSize-=(separatorSizes*(numSections-1))
+            sectionSize=totalSize/numSections
+        else:
+            # a section size was specified, so we have to figure out numSections
+            # as well as pushing things around if there is a remainder
+            if sectionSize is None:
+                sectionSize=self.step
+            else:
+                sectionSize=self.elementFactory(sectionSize)
+            totalSize=self.span
+            if endSizes is not None:
+                totalSize-=endSizes*2
+            if separatorSizes is not None:
+                numSectionsExact=(totalSize+separatorSizes)/(sectionSize+separatorSizes)
+            else:
+                numSectionsExact=totalSize/sectionSize
+            numSections=math.floor(numSectionsExact)
+            remainder=sectionSize*(numSectionsExact-numSections)
+            if remainder!=0:
+                # there is a remainder that must be handled!
+                if remainderHandline=='remainder_section':
+                    # create a section at the end for the remainder
+                    remainderSection=remainder
+                elif remainderHandline=='section_stretch':
+                    sectionSize+=remainder/numSections
+                elif remainderHandline=='section_shrink':
+                    # add a section and shrink the size of all
+                    numSections+=1
+                    if separatorSizes is not None:
+                        sectionSize=((totalSize+separatorSizes)/numSections)-separatorSizes
+                    else:
+                        sectionSize=totalSize/numSections
+                elif remainderHandline=='section_stretch_shrink':
+                    if remainder/sectionSize>=0.5:
+                        # remainder is large so add a new section
+                        numSections+=1
+                        if separatorSizes is not None:
+                            sectionSize=((totalSize+separatorSizes)/numSections)-separatorSizes
+                        else:
+                            sectionSize=totalSize/numSections
+                    else:
+                        # remainder is small so stretch existing sections to fill in
+                        sectionSize+=remainder/numSections
+                elif remainderHandline=='total_shrink':
+                    # simply keep the floor'ed numSections as it stands
+                    pass
+                elif remainderHandline=='total_grow':
+                    numSections+=1
+                elif remainderHandline=='total_shrink_grow':
+                    if remainder/sectionSize>=0.5:
+                        # remainder is large, so grow total size
+                        numSections+=1
+                    else:
+                        # remainder is small, so shrink total size
+                        pass
+                else:
+                    raise NotImplementedError(f'Unknown remainder handling mode "{remainderHandline}"')
+        # now that we have a numParts and partSize, we can iterate
+        pos=self.min
+        if endSizes is not None:
+            # the beginning end
+            if yieldEnds:
+                yield Range(pos,pos+endSizes)
+            pos+=endSizes
+        for _ in numSections:
+            if yieldSections:
+                yield Range(pos,pos+sectionSize)
+            pos+=sectionSize
+            # any separator
+            if separatorSizes is not None:
+                if yieldSeparators:
+                    yield Range(pos,pos+separatorSizes)
+                pos+=separatorSizes
+        if remainderSection is not None:
+            # an extra range to make up the remainder amount
+            if yieldSections:
+                yield Range(pos,pos+remainderSection)
+            pos+=remainderSection
+        if endSizes is not None:
+            # the ending end
+            if yieldEnds:
+                yield Range(pos,pos+endSizes)
+            pos+=endSizes
 
     # ---- Values ----
     @property
