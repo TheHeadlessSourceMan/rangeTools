@@ -33,6 +33,8 @@ def asRange(range:typing.Union["Range",RangeCompatible])->"Range":
 
 NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type
 NumberLikeCompatabilityT=typing.TypeVar("NumberLikeCompatabilityT") # when setting a Range's low and high values, these types will be acceptable
+
+
 class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
     """
     A range of number-like values
@@ -121,7 +123,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
         """
         Given one or more numbers and/or number ranges, yield up a series of Ranges
         """
-        if isinstance(ranges,(Range,str)) or not hasattr(ranges,'__iter__'):
+        if isinstance(ranges,(Range,str)) or not isinstance(ranges,collections.abc.Iterable):
             ranges=typing.cast(typing.Iterable[typing.Union[NumberLikeT,NumberLikeCompatabilityT,'Range[NumberLikeT,NumberLikeCompatabilityT]']],(ranges,))
         for range in typing.cast(typing.Iterable[typing.Union[NumberLikeT,NumberLikeCompatabilityT,'Range[NumberLikeT,NumberLikeCompatabilityT]']],ranges):
             if not isinstance(range,Range):
@@ -130,7 +132,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
 
     def split(self,
         sectionSize:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,
-        numSections:typing.Optional[NumberLike]=None,
+        numSections:typing.Optional[float]=None,
         endSizes:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,
         separatorSizes:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,
         remainderHandline:str="section_stretch",
@@ -181,9 +183,11 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
                 Range(Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,remainderHandline='total_shrink',yieldEnds=True,yieldSections=False,yieldSeparators=False)).span
             instead of that, take up remainder by keeping exactly 3inch sections, but leave whatever is left over in its own small section
                 Range(0,12).split(sectionSize=3,endSizes=0.5,separatorSizes=0.25,remainderHandline='remainder_section')
+
+        TODO: typing is pretty jacked up in this function
         """
         if endSizes is not None:
-            endSizes=self.elementFactory(endSizes)
+            endSizes=typing.cast(NumberLikeT,self.elementFactory(endSizes))
         if separatorSizes is not None:
             separatorSizes=self.elementFactory(separatorSizes)
         remainderSection:typing.Optional[NumberLikeT]=None
@@ -191,14 +195,15 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
         if numSections is not None:
             # using number of sections we have to calculate sectionSize
             # this is simpler because we don't have to mess with remainders!
-            numSections=float(numSections)
-            span=self.span
-            totalSize=span
+            if not isinstance(numSections,(float,int)):
+                numSections=float(numSections)
+            span:NumberLikeT=self.span
+            totalSize:NumberLikeT=span
             if endSizes is not None:
-                totalSize-=endSizes*2
+                totalSize-=endSizes*2 # type:ignore
             if separatorSizes is not None:
-                totalSize-=(separatorSizes*(numSections-1))
-            sectionSize=totalSize/numSections
+                totalSize-=(separatorSizes*(numSections-1)) # type:ignore
+            sectionSize=totalSize/numSections # type:ignore
         else:
             # a section size was specified, so we have to figure out numSections
             # as well as pushing things around if there is a remainder
@@ -208,38 +213,38 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
                 sectionSize=self.elementFactory(sectionSize)
             totalSize=self.span
             if endSizes is not None:
-                totalSize-=endSizes*2
+                totalSize-=endSizes*2 # type:ignore
             if separatorSizes is not None:
                 numSectionsExact=(totalSize+separatorSizes)/(sectionSize+separatorSizes)
             else:
                 numSectionsExact=totalSize/sectionSize
             numSections=math.floor(numSectionsExact)
-            remainder=sectionSize*(numSectionsExact-numSections)
+            remainder:NumberLikeT=sectionSize*(numSectionsExact-numSections) # type:ignore
             if remainder!=0:
                 # there is a remainder that must be handled!
                 if remainderHandline=='remainder_section':
                     # create a section at the end for the remainder
                     remainderSection=remainder
                 elif remainderHandline=='section_stretch':
-                    sectionSize+=remainder/numSections
+                    sectionSize+=remainder/numSections # type:ignore
                 elif remainderHandline=='section_shrink':
                     # add a section and shrink the size of all
                     numSections+=1
                     if separatorSizes is not None:
-                        sectionSize=((totalSize+separatorSizes)/numSections)-separatorSizes
+                        sectionSize=((totalSize+separatorSizes)/numSections)-separatorSizes # type:ignore
                     else:
-                        sectionSize=totalSize/numSections
+                        sectionSize=totalSize/numSections # type:ignore
                 elif remainderHandline=='section_stretch_shrink':
                     if remainder/sectionSize>=0.5:
                         # remainder is large so add a new section
                         numSections+=1
                         if separatorSizes is not None:
-                            sectionSize=((totalSize+separatorSizes)/numSections)-separatorSizes
+                            sectionSize=((totalSize+separatorSizes)/numSections)-separatorSizes # type:ignore
                         else:
-                            sectionSize=totalSize/numSections
+                            sectionSize=totalSize/numSections # type:ignore
                     else:
                         # remainder is small so stretch existing sections to fill in
-                        sectionSize+=remainder/numSections
+                        sectionSize+=remainder/numSections # type:ignore
                 elif remainderHandline=='total_shrink':
                     # simply keep the floor'ed numSections as it stands
                     pass
@@ -255,31 +260,31 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
                 else:
                     raise NotImplementedError(f'Unknown remainder handling mode "{remainderHandline}"')
         # now that we have a numParts and partSize, we can iterate
-        pos=self.min
+        pos=self.min # type:ignore
         if endSizes is not None:
             # the beginning end
             if yieldEnds:
-                yield Range(pos,pos+endSizes)
-            pos+=endSizes
-        for _ in numSections:
+                yield Range(pos,pos+endSizes) # type:ignore
+            pos+=endSizes # type:ignore
+        for _ in range(numSections): # type:ignore
             if yieldSections:
-                yield Range(pos,pos+sectionSize)
-            pos+=sectionSize
+                yield Range[NumberLikeT,NumberLikeCompatabilityT](pos,pos+sectionSize) # type:ignore
+            pos+=sectionSize # type:ignore
             # any separator
             if separatorSizes is not None:
                 if yieldSeparators:
-                    yield Range(pos,pos+separatorSizes)
-                pos+=separatorSizes
+                    yield Range(pos,pos+separatorSizes) # type:ignore
+                pos+=separatorSizes # type:ignore
         if remainderSection is not None:
             # an extra range to make up the remainder amount
             if yieldSections:
-                yield Range(pos,pos+remainderSection)
-            pos+=remainderSection
+                yield Range(pos,pos+remainderSection) # type:ignore
+            pos+=remainderSection # type:ignore
         if endSizes is not None:
             # the ending end
             if yieldEnds:
-                yield Range(pos,pos+endSizes)
-            pos+=endSizes
+                yield Range(pos,pos+endSizes) # type:ignore
+            pos+=endSizes # type:ignore
 
     # ---- Values ----
     @property
