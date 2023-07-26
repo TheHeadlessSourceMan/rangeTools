@@ -4,6 +4,7 @@ Specify ranges in timedelta form, for example "3-5 days"
 import typing
 import collections.abc
 import math
+import regex
 
 
 class NumberLike(typing.Protocol):
@@ -45,11 +46,12 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
     """
 
     RANGE_RE=r"""[\s\[\(]*
-        (?P<from>[\-]?([0-9]|([.][0-9]))+(\s*[^;:,-.=|]+)?)
-        (?P<sep>((\.+)|(-+)|(\s*))
+        (?P<from>[\-]?(([0-9]+([.][0-9]+)?)|([.][0-9]+)))
+        ((?P<sep>((\.+)|(-+)|(\s*))
             ([;:,|]|[.]{2,99}|[-]{2,99}|([-]\s)|(=>)|(->)|([.]\s))?\s*
         )
-        (?P<to>[^\]\)]+).*"""
+        (?P<to>[^\]\)]+).*)?
+        """.replace('\r','').replace('\n','').replace(' ','')
 
     # ---- Object housekeeping ----
     def __init__(self,
@@ -71,8 +73,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
         """
         self._low:NumberLikeT
         self._high:NumberLikeT
-        self._center:typing.Optional[NumberLikeT]
-        self._step:typing.Optional[NumberLikeT]
+        self._center:typing.Optional[NumberLikeT]=None
+        self._step:typing.Optional[NumberLikeT]=None
         if elementFactory is None:
             def f(x:typing.Any)->NumberLikeT:
                 if x is None:
@@ -98,8 +100,20 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
 
     def assign(self,
         low:typing.Union[NumberLikeT,NumberLikeCompatabilityT,typing.Iterable[typing.Union[NumberLikeT,NumberLikeCompatabilityT]]],
-        high:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None,):
-        if isinstance(low,collections.abc.Iterable) and not isinstance(low,str):
+        high:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None):
+        """ """
+        if isinstance(low,str):
+            d=regex.match(self.RANGE_RE,low,regex.MULTILINE).groupdict()
+            low=float(d['from'])
+            if high is None:
+                h=d.get('to')
+                if h is not None:
+                    high=float(h)
+                else:
+                    high=low
+            self.low=low
+            self.high=high
+        elif isinstance(low,collections.abc.Iterable):
             self.low=min(low)
             self.high=max(low)
         else:
