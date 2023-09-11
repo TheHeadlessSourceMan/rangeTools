@@ -99,20 +99,20 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatabilityT]):
         return False
 
     def assign(self,
-        low:typing.Union[NumberLikeT,NumberLikeCompatabilityT,typing.Iterable[typing.Union[NumberLikeT,NumberLikeCompatabilityT]]],
-        high:typing.Union[None,NumberLikeT,NumberLikeCompatabilityT]=None):
+        low:typing.Union[float,NumberLikeT,NumberLikeCompatabilityT,typing.Iterable[typing.Union[NumberLikeT,NumberLikeCompatabilityT]]],
+        high:typing.Union[None,float,NumberLikeT,NumberLikeCompatabilityT]=None):
         """ """
         if isinstance(low,str):
             d=regex.match(self.RANGE_RE,low,regex.MULTILINE).groupdict()
-            low=float(d['from'])
+            low=float(d.group('from'))
             if high is None:
                 h=d.get('to')
                 if h is not None:
                     high=float(h)
                 else:
                     high=low
-            self.low=low
-            self.high=high
+            self.low=typing.cast(NumberLikeT,low)
+            self.high=typing.cast(NumberLikeT,high)
         elif isinstance(low,collections.abc.Iterable):
             self.low=min(low)
             self.high=max(low)
