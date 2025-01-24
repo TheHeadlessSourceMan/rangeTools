@@ -30,34 +30,34 @@ class Ranges(typing.Generic[NumberLikeT]):
         """
         if isinstance(ranges,Range) and not isinstance(ranges,Ranges):
             ranges=[ranges]
-        for r in ranges:
+        for _ in ranges:
             # TODO: fit it in, expanding groups as necessary
             raise NotImplementedError()
 
     @property
-    def minimum(self)->float:
+    def minimum(self)->NumberLikeT:
         """
-        return the minimumimum of all ranges
+        return the minimum of all ranges
         """
-        acc=None
+        acc:typing.Optional[NumberLikeT]=None
         for r in self._ranges:
             if acc is None or r.minimum<acc:
-                acc=r.minimum
+                acc=r.minimum # type: ignore
         if acc is None:
-            return 0.0
+            raise IndexError("Range has no members")
         return acc
 
     @property
-    def maximum(self)->float:
+    def maximum(self)->NumberLikeT:
         """
-        return the maximumimum of all ranges
+        return the maximum of all ranges
         """
-        acc=None
+        acc:typing.Optional[NumberLikeT]=None
         for r in self._ranges:
             if acc is None or r.maximum>acc:
-                acc=r.maximum
+                acc=r.maximum # type: ignore
         if acc is None:
-            return 0.0
+            raise IndexError("Range has no members")
         return acc
 
     def contains(self,other:typing.Union["Range",float])->bool:
@@ -66,8 +66,10 @@ class Ranges(typing.Generic[NumberLikeT]):
             getRange(other) is not None
         """
         return self.getRange(other) is not None
-    
-    def getRange(self,item:typing.Union["Range",float])->typing.Optional[Range]:
+
+    def getRange(self,
+        item:typing.Union["Range",float]
+        )->typing.Optional[Range]:
         """
         Get the first range in the list that contains the given item.
         If not in any of the ranges, returns None.
@@ -76,12 +78,13 @@ class Ranges(typing.Generic[NumberLikeT]):
             if r.contains(item):
                 return r
         return None
-    
+
     def getNearestRange(self,item:typing.Union["Range",float])->Range:
         """
         Get the first range in the list that contains the given item.
-        If not in any of the ranges, returns the one with the edge closest to item.
-        
+        If not in any of the ranges, returns the one with the
+        edge closest to item.
+
         If there are no ranges raises exception
         """
         if not self._ranges:
@@ -90,11 +93,13 @@ class Ranges(typing.Generic[NumberLikeT]):
         if ret is not None:
             return ret
         bestVal=0.0
-        for range in self._ranges:
-            val=min(abs(float(range.low-item)),abs(float(range.high-item)))
+        for singleRange in self._ranges:
+            val=min(
+                abs(float(singleRange.low-item)),
+                abs(float(singleRange.high-item)))
             if ret is None or val<bestVal:
                 bestVal=val
-                ret=range
+                ret=singleRange
         return ret # type:ignore
 
     def __cmp__(self,
