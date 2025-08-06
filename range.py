@@ -2,7 +2,6 @@
 Specify ranges in timedelta form, for example "3-5 days"
 """
 import typing
-import collections.abc
 import math
 import regex # type: ignore
 from rangeTools.numberLike import NumberLike
@@ -25,7 +24,7 @@ def asRange(
     return Range(rangeCompatible)
 
 NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type # noqa: E501 # pylint: disable=line-too-long
-NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT") # when setting a Range's low and high values, these types will be acceptable # noqa: E501 # pylint: disable=line-too-long
+NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT",default=NumberLikeT) # when setting a Range's low and high values, these types will be acceptable # noqa: E501 # pylint: disable=line-too-long
 
 
 class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
@@ -127,9 +126,9 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
                     high=low
             self.low=typing.cast(NumberLikeT,low)
             self.high=typing.cast(NumberLikeT,high)
-        elif isinstance(low,collections.abc.Iterable):
-            self.low=min(low)
-            self.high=max(low)
+        elif hasattr(low,'__iter__'):
+            self.low=min(low) # type:ignore
+            self.high=max(low) # type:ignore
         else:
             self.low=low # type:ignore
             if high is not None:
@@ -170,8 +169,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         if isinstance(ranges,Range) \
             or not hasattr(ranges,'__iter__'):
             #
-            ranges=[ranges]
-        for rangeItem in ranges:
+            ranges=[ranges] # type: ignore
+        for rangeItem in ranges: # type: ignore
             if not isinstance(rangeItem,Range):
                 rangeItem=asRange(rangeItem) # type: ignore
             yield rangeItem
@@ -447,7 +446,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         If the range has units associated with it, return them
         """
         if hasattr(self.low,'units'):
-            return self.low.units
+            return self.low.units # type: ignore
         return None
 
     @property
