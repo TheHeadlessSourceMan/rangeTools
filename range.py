@@ -24,7 +24,13 @@ def asRange(
     return Range(rangeCompatible)
 
 NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type # noqa: E501 # pylint: disable=line-too-long
-NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT",default=NumberLikeT) # when setting a Range's low and high values, these types will be acceptable # noqa: E501 # pylint: disable=line-too-long
+# when setting a Range's low and high values, these types will be acceptable
+try:
+    NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT",default=NumberLikeT) # noqa: E501 # pylint: disable=line-too-long
+except TypeError:
+    # default= is not always allowed
+    NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT") # noqa: E501 # pylint: disable=line-too-long
+
 
 
 class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
