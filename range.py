@@ -4,25 +4,8 @@ Specify ranges in timedelta form, for example "3-5 days"
 import typing
 import math
 import regex # type: ignore
+from rangeTools.numberLike import NumberLike
 
-
-class NumberLike(typing.Protocol):
-    """
-    Represents something that can be treated like a number
-    """
-    def __sub__(self,other:typing.Any)->"NumberLike": ... # noqa: E704
-    def __add__(self,other:typing.Any)->"NumberLike": ... # noqa: E704
-    def __mul__(self,other:typing.Any)->"NumberLike": ... # noqa: E704
-    def __div__(self,other:typing.Any)->"NumberLike": ... # noqa: E704
-    def __truediv__(self,other:typing.Any)->"NumberLike": ... # noqa: E704
-    def __floordiv__(self,other:typing.Any)->"NumberLike": ... # noqa: E704
-    def __lt__(self, __other:typing.Any) -> bool: ... # noqa: E704
-    def __gt__(self, __other:typing.Any) -> bool: ... # noqa: E704
-    def __le__(self, __other:typing.Any) -> bool: ... # noqa: E704
-    def __ge__(self, __other:typing.Any) -> bool: ... # noqa: E704
-    def __float__(self) -> float: ... # noqa: E704
-    def __int__(self) -> int: ... # noqa: E704
-    def __repr__(self) -> str: ... # noqa: E704
 
 UnitsType=typing.Any
 
@@ -45,6 +28,15 @@ def asRange[NumberLikeT,NumberLikeCompatibilityT](
     if isinstance(rangeCompatible,Range):
         return rangeCompatible
     return Range[NumberLikeT,NumberLikeCompatibilityT](rangeCompatible)
+
+NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type # noqa: E501 # pylint: disable=line-too-long
+# when setting a Range's low and high values, these types will be acceptable
+try:
+    NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT",default=NumberLikeT) # noqa: E501 # pylint: disable=line-too-long
+except TypeError:
+    # default= is not always allowed
+    NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT") # noqa: E501 # pylint: disable=line-too-long
+
 
 
 class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
@@ -151,9 +143,9 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
                     high=low
             self.low=typing.cast(NumberLikeT,low)
             self.high=typing.cast(NumberLikeT,high)
-        elif hasattr(low,"__iter__"):
-            self.low=min([float(v) for v in low])
-            self.high=max(low)
+        elif hasattr(low,'__iter__'):
+            self.low=min([float(v) for v in low]) # type:ignore
+            self.high=max(low) # type:ignore
         else:
             self.low=low # type:ignore
             if high is not None:
@@ -194,8 +186,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         if isinstance(ranges,Range) \
             or not hasattr(ranges,'__iter__'):
             #
-            ranges=[ranges]
-        for rangeItem in ranges:
+            ranges=[ranges] # type: ignore
+        for rangeItem in ranges: # type: ignore
             if not isinstance(rangeItem,Range):
                 rangeItem=asRange(rangeItem) # type: ignore
             yield rangeItem
