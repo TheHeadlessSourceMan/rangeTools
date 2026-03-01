@@ -2,7 +2,6 @@
 Specify ranges in timedelta form, for example "3-5 days"
 """
 import typing
-import collections.abc
 import math
 import regex # type: ignore
 
@@ -29,9 +28,15 @@ UnitsType=typing.Any
 
 RangeCompatible=typing.Union[NumberLike,str]
 
-def asRange(
-    rangeCompatible:typing.Union["Range",RangeCompatible]
-    )->"Range":
+
+NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type # noqa: E501 # pylint: disable=line-too-long
+NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT") # when setting a Range's low and high values, these types will be acceptable # noqa: E501 # pylint: disable=line-too-long
+
+
+def asRange[NumberLikeT,NumberLikeCompatibilityT](
+    rangeCompatible:typing.Union[
+        "Range[NumberLikeT,NumberLikeCompatibilityT]",RangeCompatible]
+    )->"Range[NumberLikeT,NumberLikeCompatibilityT]":
     """
     Convert something to a Range.
 
@@ -39,10 +44,7 @@ def asRange(
     """
     if isinstance(rangeCompatible,Range):
         return rangeCompatible
-    return Range(rangeCompatible)
-
-NumberLikeT=typing.TypeVar("NumberLikeT",bound=NumberLike) # A Range's low and high values will be of this type # noqa: E501 # pylint: disable=line-too-long
-NumberLikeCompatibilityT=typing.TypeVar("NumberLikeCompatibilityT") # when setting a Range's low and high values, these types will be acceptable # noqa: E501 # pylint: disable=line-too-long
+    return Range[NumberLikeT,NumberLikeCompatibilityT](rangeCompatible)
 
 
 class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
@@ -65,6 +67,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
     # ---- Object housekeeping ----
     def __init__(self,
         low:typing.Union[
+            None,
             NumberLikeT,
             NumberLikeCompatibilityT,
             typing.Iterable[typing.Union[
@@ -88,8 +91,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         :lowInclusive: is comparison >low or >=low
         :highInclusive: is comparison <high or <=high
         """
-        self._low:NumberLikeT
-        self._high:NumberLikeT
+        self._low:typing.Optional[NumberLikeT]=None
+        self._high:typing.Optional[NumberLikeT]=None
         self._center:typing.Optional[NumberLikeT]=None
         self._step:typing.Optional[NumberLikeT]=None
         if elementFactory is None:
@@ -119,6 +122,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
 
     def assign(self,
         low:typing.Union[
+            None,
             float,
             NumberLikeT,
             NumberLikeCompatibilityT,
@@ -134,8 +138,11 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         Assign the value of this range.
         """
         if isinstance(low,str):
-            d=regex.match(self.RANGE_RE,low,regex.MULTILINE).groupdict()
-            low=float(d.group('from'))
+            m=regex.match(self.RANGE_RE,low,regex.MULTILINE)
+            if m is None:
+                raise ValueError(f'Unable to assign low value to "{low}"')
+            d=m.groupdict()
+            low=float(m.group('from'))
             if high is None:
                 h=d.get('to')
                 if h is not None:
@@ -144,8 +151,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
                     high=low
             self.low=typing.cast(NumberLikeT,low)
             self.high=typing.cast(NumberLikeT,high)
-        elif isinstance(low,collections.abc.Iterable):
-            self.low=min(low)
+        elif hasattr(low,"__iter__"):
+            self.low=min([float(v) for v in low])
             self.high=max(low)
         else:
             self.low=low # type:ignore
@@ -303,7 +310,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             numSections=math.floor(numSectionsExact)
             remainder:NumberLikeT=\
                 sectionSize*(numSectionsExact-numSections) # type:ignore
-            if remainder!=0:
+            if float(remainder)!=0:
                 # there is a remainder that must be handled!
                 if remainderHandling=='remainder_section':
                     # create a section at the end for the remainder
@@ -377,7 +384,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
 
     # ---- Values ----
     @property
-    def low(self)->NumberLikeT:
+    def low(self)->typing.Optional[NumberLikeT]:
         """
         low value of the range
         """
@@ -396,7 +403,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
     start=low
 
     @property
-    def high(self)->NumberLikeT:
+    def high(self)->typing.Optional[NumberLikeT]:
         """
         high value of the range
         """
@@ -417,7 +424,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
     stop=high
 
     @property
-    def center(self)->NumberLikeT:
+    def center(self)->typing.Optional[NumberLikeT]:
         """
         center is the midpoint between maximum and minimum,
         but can be manually overridden
@@ -463,28 +470,38 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         """
         If the range has units associated with it, return them
         """
-        if hasattr(self.low,'units'):
-            return self.low.units
+        if self.low is not None and hasattr(self.low,'units'):
+            return self.low.units # type: ignore
+        if self.high is not None and hasattr(self.high,'units'):
+            return self.high.units # type: ignore
         return None
 
     @property
-    def average(self)->NumberLikeT:
+    def average(self)->typing.Optional[NumberLikeT]:
         """
         average value of this range
         """
-        return typing.cast(NumberLikeT,(self.low+self.high)/2.0)
+        if self.low is None:
+            if self.high is None:
+                return None
+            return self.high
+        if self.high is None:
+            return self.low
+        return (self.low+self.high)/2.0
 
     @property
-    def tolerance(self)->NumberLikeT:
+    def tolerance(self)->typing.Optional[NumberLikeT]:
         """
         The tolerance as in value +/- tolerance
 
         :raises ValueError: if center point is overridden and
         therefore +/- tolerances cannot be expressed as a single value
         """
-        if self._center is not None and self._center!=self.high-self.low:
+        if self.center is None or self.high is None or self.low is None:
+            return None
+        if self.center!=self.high-self.low:
             raise ValueError('Range with manually-overridden center point cannot be expressed as "value +/- tolerance"') # noqa: E501 # pylint: disable=line-too-long
-        return typing.cast(NumberLikeT,self.center-self.low)
+        return self.center-self.low
     @tolerance.setter
     def tolerance(self,
         tolerance:typing.Union[
@@ -509,11 +526,13 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             self.toleranceString=(str(tolerance))
 
     @property
-    def span(self)->NumberLikeT:
+    def span(self)->typing.Optional[NumberLikeT]:
         """
         this is exactly the same as self.high-self.low
         """
-        return typing.cast(NumberLikeT,self.high-self.low)
+        if self.high is None or self.low is None:
+            return None
+        return self.high-self.low
     @span.setter
     def span(self,span:NumberLikeCompatibilityT):
         """
@@ -522,7 +541,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
 
         NOTE: setting the span could clobber user-defined self.center
         """
-        self.high=typing.cast(NumberLikeT,self.low+self.elementFactory(span))
+        self.high=self.low+self.elementFactory(span)
         if self._center is not None:
             if self._center>self.high:
                 self._center=self.high
@@ -879,10 +898,10 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         if other is at all within the range
         does the same thing as contains() unless other is a range
         """
-        if self.low>=other.low:
-            if self.low<=other.high:
+        if self.low is None or other.low is None or self.low>=other.low:
+            if self.low is None or other.high is None or self.low<=other.high:
                 return True
-        elif other.high>=self.high:
+        elif other.high is None or self.high is None or other.high>=self.high:
             return True
         return False
     intersects=overlaps
@@ -893,18 +912,18 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         TODO: Instead of [low,high] should we be doing like iteration?
         """
         return 2
-    def __getitem__(self,idx:int)->NumberLikeT:
+    def __getitem__(self,idx:int)->typing.Optional[NumberLikeT]:
         if idx==0:
             return self.low
         if idx==1:
             return self.high
         raise IndexError()
 
-    def __iter__(self)->typing.Generator[NumberLikeT,None,None]:
+    def __iter__(self)->typing.Generator[typing.Optional[NumberLikeT],None,None]:
         return self.iterate()
     def iterate(self,
         partSize:typing.Optional[NumberLikeT]=None
-        )->typing.Generator[NumberLikeT,None,None]:
+        )->typing.Generator[typing.Optional[NumberLikeT],None,None]:
         """
         if partSize is None, uses self.step
         (which is exactly what that value is for anyway)
@@ -1039,7 +1058,10 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         partSize=self.elementFactory(partSize)
         numParts=self.maxParts(partSize)
         gapSize=self.gapSize(partSize,numParts)
-        last:NumberLikeT=self.low
+        if self.low is not None:
+            last:NumberLikeT=self.low
+        else:
+            last=0
         current:NumberLikeT=partSize
         while current<self.high:
             yield self.__class__(last,current)
@@ -1070,10 +1092,10 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             for(x in range(0,10))
             for(x in range(0,10,1))
         """
-        if self.step!=1:
+        if float(self.step)!=1:
             return 'range(%s,%s,%s)'%(
                 str(self.start),str(self.stop),str(self.step))
-        if self.low!=0:
+        if self.low is None or float(self.low)!=0:
             return 'range(%s,%s)'%(
                 str(self.start),str(self.stop))
         return 'range(%s)'%(str(self.stop))
@@ -1104,7 +1126,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         tol=self.elementFactory(float(''.join(tol_l))) # type:ignore
         self.low=typing.cast(NumberLikeT,val-tol)
         self.high=typing.cast(NumberLikeT,val+tol)
-    def getToleranceString(self,plusMinusSeparator=' +/- ')->str:
+    def getToleranceString(self,plusMinusSeparator:str=' +/- ')->str:
         """
         A center+tolerance string like
         100 +/- 5
@@ -1134,6 +1156,6 @@ def test():
     """
     Run the test
     """
-    a=Range[float](1.0,2.0)
-    b=Range[float](2.0,4.0)
+    a=Range[float,float](1.0,2.0)
+    b=Range[float,float](2.0,4.0)
     print(a,b,a+b)
