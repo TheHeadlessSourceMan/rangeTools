@@ -3,7 +3,6 @@ Specify ranges in timedelta form, for example "3-5 days"
 """
 import typing
 import math
-import regex # type: ignore
 from rangeTools.numberLike import NumberLike
 
 
@@ -265,9 +264,9 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         TODO: typing is pretty jacked up in this function
         """ # noqa: E501 # pylint: disable=line-too-long
         if endSizes is not None:
-            endSizes=typing.cast(NumberLikeT,self.elementFactory(endSizes))
+            endSizes=typing.cast(NumberLikeT,self.convertElement(endSizes))
         if separatorSizes is not None:
-            separatorSizes=self.elementFactory(separatorSizes)
+            separatorSizes=self.convertElement(separatorSizes)
         remainderSection:typing.Optional[NumberLikeT]=None
         # figure out what the sizes of things will be
         if numSections is not None:
@@ -289,7 +288,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             if sectionSize is None:
                 sectionSize=self.step
             else:
-                sectionSize=self.elementFactory(sectionSize)
+                sectionSize=self.convertElement(sectionSize)
             totalSize=self.span
             if endSizes is not None:
                 totalSize-=endSizes*2 # type:ignore
@@ -387,7 +386,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         If assigning a low greater than the current high,
         the high will change to equal low
         """
-        self._low=self.elementFactory(low)
+        self._low=self.convertElement(low)
         if hasattr(self,'_high') and self._low>self._high:
             self._high=self._low
     min=low
@@ -408,7 +407,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         If assigning a high less than the current low,
         the low will change to equal high
         """
-        self._high=self.elementFactory(high)
+        self._high=self.convertElement(high)
         if self._high<self._low:
             self._low=self._high
     max=high
@@ -439,7 +438,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         """
         Center point of the range.
         """
-        self._center=self.elementFactory(center)
+        self._center=self.convertElement(center)
 
     @property
     def step(self)->NumberLikeT:
@@ -448,14 +447,14 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         this is the increment step size
         """
         if self._step is None:
-            return self.elementFactory(1) # type:ignore
+            return self.convertElement(1) # type:ignore
         return self._step
     @step.setter
     def step(self,
         step:typing.Union[NumberLikeT,NumberLikeCompatibilityT]
         )->None:
         """ """
-        self._step=self.elementFactory(step)
+        self._step=self.convertElement(step)
 
     @property
     def units(self)->typing.Optional[UnitsType]:
@@ -533,7 +532,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
 
         NOTE: setting the span could clobber user-defined self.center
         """
-        self.high=self.low+self.elementFactory(span)
+        self.high=self.low+self.convertElement(span)
         if self._center is not None:
             if self._center>self.high:
                 self._center=self.high
@@ -690,7 +689,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             Eg 6day/3day=2
         """
         if not isinstance(other,Range):
-            other=self.elementFactory(other)
+            other=self.convertElement(other)
             center=None
             if self._center is not None:
                 center=self._center/2
@@ -709,7 +708,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
 
         :return: self - for easy operation chaining
         """
-        other=self.elementFactory(other)
+        other=self.convertElement(other)
         self.low+=other # type:ignore
         self.high+=other # type:ignore
         return self
@@ -742,7 +741,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         if isinstance(other,Range):
             other=other.center
         else:
-            other=self.elementFactory(other)
+            other=self.convertElement(other)
         return typing.cast(NumberLikeT,other-self.center)
 
     def _numberLikeAbs(self,val:NumberLike)->NumberLikeT:
@@ -767,7 +766,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         if not isinstance(other,Range):
             if self.contains(other):
                 return typing.cast(NumberLikeT,0)
-            other=self.elementFactory(other)
+            other=self.convertElement(other)
             return min(
                 self._numberLikeAbs(other-self.high),
                 self._numberLikeAbs(other-self.low))
@@ -781,6 +780,17 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
     minDistance=minimumDistance
     distance=minimumDistance
 
+    def convertElement(self,element:NumberLikeCompatibilityT)->NumberLikeT:
+        """
+        Attempt to convert an element.
+
+        Uses the elementFactory if we have one.  Otherwise
+        attempts to use float()
+        """
+        if self.elementFactory is not None:
+            return self.elementFactory(element)
+        return typing.cast(NumberLikeT,float(element))
+
     # --- Comparison Operators ---
     def __lt__(self,
         other:typing.Union[
@@ -793,7 +803,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         """
         if isinstance(other,Range):
             return self.high<other.low
-        return self.high<self.elementFactory(other)
+        return self.high<self.convertElement(other)
     def __gt__(self,other:typing.Union[
         NumberLikeT,
         NumberLikeCompatibilityT,
@@ -804,7 +814,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         """
         if isinstance(other,Range):
             return self.low>other.high
-        return self.low>self.elementFactory(other)
+        return self.low>self.convertElement(other)
     def __le__(self,
         other:typing.Union[
             NumberLikeT,
@@ -818,7 +828,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             if self<other:
                 return True
             return self.overlaps(other)
-        return self.high<=self.elementFactory(other)
+        return self.high<=self.convertElement(other)
     def __ge__(self,
         other:typing.Union[
             NumberLikeT,
@@ -832,8 +842,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
             if self>other:
                 return True
             return self.overlaps(other)
-        return self.low>=self.elementFactory(other)
-    def __eq__(self,
+        return self.low>=self.convertElement(other)
+    def __equ__(self,
         other:typing.Union[
             NumberLikeT,
             NumberLikeCompatibilityT,
@@ -844,8 +854,11 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         equals operator
         """
         if isinstance(other,Range):
+            other=typing.cast(Range[NumberLikeT,NumberLikeCompatibilityT],other)
+            if self.high is None or other.low is None:
+                return False
             return self.high<other.low
-        other=self.elementFactory(other)
+        other=self.convertElement(other)
         return self.high==other \
             and self.low==other \
             and self.lowInclusive \
@@ -868,7 +881,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         """
         if isinstance(other,Range):
             return other.low>=self.low and other.high<=self.high
-        other=self.elementFactory(other)
+        other=self.convertElement(other)
         return other>=self.low and other<=self.high
     def containedBy(self,
         other:"Range[NumberLikeT,NumberLikeCompatibilityT]"
@@ -1047,7 +1060,7 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
         if self.span<=partSize:
             yield self
             return
-        partSize=self.elementFactory(partSize)
+        partSize=self.convertElement(partSize)
         numParts=self.maxParts(partSize)
         gapSize=self.gapSize(partSize,numParts)
         if self.low is not None:
@@ -1114,8 +1127,8 @@ class Range(typing.Generic[NumberLikeT,NumberLikeCompatibilityT]):
                     tol_l.append(c)
                 elif tol_l: # end of tolerance
                     break
-        val=self.elementFactory(float(''.join(val_l))) # type:ignore
-        tol=self.elementFactory(float(''.join(tol_l))) # type:ignore
+        val=self.convertElement(float(''.join(val_l))) # type:ignore
+        tol=self.convertElement(float(''.join(tol_l))) # type:ignore
         self.low=typing.cast(NumberLikeT,val-tol)
         self.high=typing.cast(NumberLikeT,val+tol)
     def getToleranceString(self,plusMinusSeparator:str=' +/- ')->str:
